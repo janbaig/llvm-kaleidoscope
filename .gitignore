@@ -1,0 +1,2 @@
+# In top-level .gitignore
+llvm-kaleidoscope/*.out*
