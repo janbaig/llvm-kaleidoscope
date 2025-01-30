@@ -483,7 +483,7 @@ static void InitializeModule() {
 static void HandleDefinition() {
   if (auto FnAST = ParseDefinition()) {
     if (auto *FnIR = FnAST->codegen()) {
-      fprintf(stderr, "Read function definition:");
+      fprintf(stderr, "Read function definition: \n");
       FnIR->print(errs());
       fprintf(stderr, "\n");
     }
@@ -510,7 +510,7 @@ static void HandleTopLevelExpression() {
   // Evaluate a top-level expression into an anonymous function.
   if (auto FnAST = ParseTopLevelExpr()) {
     if (auto *FnIR = FnAST->codegen()) {
-      fprintf(stderr, "Read top-level expression:");
+      fprintf(stderr, "Read top-level expression: \n");
       FnIR->print(errs());
       fprintf(stderr, "\n");
 
@@ -523,7 +523,6 @@ static void HandleTopLevelExpression() {
   }
 }
 
-/// top ::= definition | external | expression | ';'
 static void MainLoop() {
   while (true) {
     fprintf(stderr, "ready> ");
@@ -563,8 +562,12 @@ int main() {
   fprintf(stderr, "ready> ");
   getNextToken();
 
+  InitializeModule();
+
   // Run the main "interpreter loop" now.
   MainLoop();
+
+  TheModule->print(errs(), nullptr);
 
   return 0;
 }
