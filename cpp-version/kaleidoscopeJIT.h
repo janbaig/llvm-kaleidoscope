@@ -14,7 +14,6 @@
 #define LLVM_EXECUTIONENGINE_ORC_KALEIDOSCOPEJIT_H
 
 #include "llvm/ADT/StringRef.h"
-#include "llvm/ExecutionEngine/JITSymbol.h"
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h"
 #include "llvm/ExecutionEngine/Orc/Core.h"
 #include "llvm/ExecutionEngine/Orc/ExecutionUtils.h"
@@ -33,73 +32,67 @@ namespace orc {
 
 class KaleidoscopeJIT {
 private:
-  std::unique_ptr<ExecutionSession> ES;
-
-  DataLayout DL;
-  MangleAndInterner Mangle;
-
-  RTDyldObjectLinkingLayer ObjectLayer;
-  IRCompileLayer CompileLayer;
-
-  JITDylib &MainJD;
+  std::unique_ptr<ExecutionSession> ES;       // Manages JIT runtime state
+  DataLayout DL;                              // Target data layout (e.g., x86_64)
+  MangleAndInterner Mangle;                   // Mangles symbol names (e.g., "foo" → "_Z3foov")
+  IRCompileLayer CompileLayer;                // Compiles IR → object files
+  RTDyldObjectLinkingLayer ObjectLayer;       // Links object files into memory
+  JITDylib &MainJD;                           // Dynamic library - "symbol table" for JIT-compiled code
 
 public:
-  KaleidoscopeJIT(std::unique_ptr<ExecutionSession> ES,
-                  JITTargetMachineBuilder JTMB, DataLayout DL)
-      : ES(std::move(ES)), DL(std::move(DL)), Mangle(*this->ES, this->DL),
-        ObjectLayer(*this->ES,
-                    []() { return std::make_unique<SectionMemoryManager>(); }),
-        CompileLayer(*this->ES, ObjectLayer,
-                     std::make_unique<ConcurrentIRCompiler>(std::move(JTMB))),
-        MainJD(this->ES->createBareJITDylib("<main>")) {
-    MainJD.addGenerator(
-        cantFail(DynamicLibrarySearchGenerator::GetForCurrentProcess(
-            DL.getGlobalPrefix())));
-    if (JTMB.getTargetTriple().isOSBinFormatCOFF()) {
-      ObjectLayer.setOverrideObjectFlagsWithResponsibilityFlags(true);
-      ObjectLayer.setAutoClaimResponsibilityForObjectSymbols(true);
-    }
-  }
+
+  KaleidoscopeJIT(std::unique_ptr<ExecutionSession> ES, 
+                  JITTargetMachineBuilder JTMB, 
+                  DataLayout DL) 
+    : ES(std::move(ES)), DL(std::move(DL)), Mangle(*this->ES, this->DL),
+      ObjectLayer(*this->ES, 
+                  []() { return std::make_unique<SectionMemoryManager>(); }),
+      CompileLayer(*this->ES, ObjectLayer, 
+                  std::make_unique<ConcurrentIRCompiler>(std::move(JTMB))),
+      MainJD(this->ES->createBareJITDylib("<main>")) {
+
+    MainJD.addGenerator( // Adds a generator to search for symbols in the current process
+      cantFail(DynamicLibrarySearchGenerator::GetForCurrentProcess(
+        DL.getGlobalPrefix())));
+  } 
 
   ~KaleidoscopeJIT() {
-    if (auto Err = ES->endSession())
-      ES->reportError(std::move(Err));
+    if (auto Err = ES->endSession()) 
+      ES->reportError(std::move(Err)); // if any errors, report it
   }
 
   static Expected<std::unique_ptr<KaleidoscopeJIT>> Create() {
     auto EPC = SelfExecutorProcessControl::Create();
-    if (!EPC)
+    if (!EPC) 
       return EPC.takeError();
-
     auto ES = std::make_unique<ExecutionSession>(std::move(*EPC));
 
-    JITTargetMachineBuilder JTMB(
-        ES->getExecutorProcessControl().getTargetTriple());
-
+    JITTargetMachineBuilder JTMB (
+      ES->getExecutorProcessControl().getTargetTriple());
+    
     auto DL = JTMB.getDefaultDataLayoutForTarget();
     if (!DL)
-      return DL.takeError();
-
-    return std::make_unique<KaleidoscopeJIT>(std::move(ES), std::move(JTMB),
-                                             std::move(*DL));
+      return DL.takeError(); 
+    
+    return std::make_unique<KaleidoscopeJIT>(std::move(ES), std::move(JTMB), 
+                                              std::move(*DL));
   }
-
+  
   const DataLayout &getDataLayout() const { return DL; }
-
+  
   JITDylib &getMainJITDylib() { return MainJD; }
-
+  
   Error addModule(ThreadSafeModule TSM, ResourceTrackerSP RT = nullptr) {
-    if (!RT)
+    if (!RT) 
       RT = MainJD.getDefaultResourceTracker();
     return CompileLayer.add(RT, std::move(TSM));
   }
 
   Expected<ExecutorSymbolDef> lookup(StringRef Name) {
-    return ES->lookup({&MainJD}, Mangle(Name.str()));
+    return ES->lookup({ &MainJD }, Mangle(Name.str()));
   }
 };
 
 } // end namespace orc
 } // end namespace llvm
-
 #endif // LLVM_EXECUTIONENGINE_ORC_KALEIDOSCOPEJIT_H

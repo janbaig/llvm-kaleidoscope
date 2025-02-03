@@ -1,4 +1,4 @@
 # In top-level .gitignore
-llvm-kaleidoscope/*.out*
-llvm-kaleidoscope/main*
+main
+main.dSYM
 .vscode
