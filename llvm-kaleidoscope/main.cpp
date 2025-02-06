@@ -38,8 +38,6 @@ using namespace llvm::orc;
 // Lexer
 //===----------------------------------------------------------------------===//
 
-// The lexer returns tokens [0-255] if it is an unknown character, otherwise one
-// of these for known things.
 enum Token {
   tok_eof = -1,
 
@@ -55,7 +53,6 @@ enum Token {
 static std::string IdentifierStr; // Filled in if tok_identifier
 static double NumVal;             // Filled in if tok_number
 
-/// gettok - Return the next token from standard input.
 static int gettok() {
   static int LastChar = ' ';
 
@@ -112,7 +109,6 @@ static int gettok() {
 
 namespace {
 
-/// ExprAST - Base class for all expression nodes.
 class ExprAST {
 public:
   virtual ~ExprAST() = default;
@@ -120,7 +116,6 @@ public:
   virtual Value *codegen() = 0;
 };
 
-/// NumberExprAST - Expression class for numeric literals like "1.0".
 class NumberExprAST : public ExprAST {
   double Val;
 
@@ -130,7 +125,6 @@ public:
   Value *codegen() override;
 };
 
-/// VariableExprAST - Expression class for referencing a variable, like "a".
 class VariableExprAST : public ExprAST {
   std::string Name;
 
@@ -140,7 +134,6 @@ public:
   Value *codegen() override;
 };
 
-/// BinaryExprAST - Expression class for a binary operator.
 class BinaryExprAST : public ExprAST {
   char Op;
   std::unique_ptr<ExprAST> LHS, RHS;
@@ -153,7 +146,6 @@ public:
   Value *codegen() override;
 };
 
-/// CallExprAST - Expression class for function calls.
 class CallExprAST : public ExprAST {
   std::string Callee;
   std::vector<std::unique_ptr<ExprAST>> Args;
@@ -166,9 +158,9 @@ public:
   Value *codegen() override;
 };
 
-/// PrototypeAST - This class represents the "prototype" for a function,
-/// which captures its name, and its argument names (thus implicitly the number
-/// of arguments the function takes).
+// PrototypeAST - This class represents the "prototype" for a function,
+// which captures its name, and its argument names (thus implicitly the number
+// of arguments the function takes).
 class PrototypeAST {
   std::string Name;
   std::vector<std::string> Args;
@@ -181,7 +173,6 @@ public:
   const std::string &getName() const { return Name; }
 };
 
-/// FunctionAST - This class represents a function definition itself.
 class FunctionAST {
   std::unique_ptr<PrototypeAST> Proto;
   std::unique_ptr<ExprAST> Body;
@@ -200,17 +191,11 @@ public:
 // Parser
 //===----------------------------------------------------------------------===//
 
-/// CurTok/getNextToken - Provide a simple token buffer.  CurTok is the current
-/// token the parser is looking at.  getNextToken reads another token from the
-/// lexer and updates CurTok with its results.
 static int CurTok;
 static int getNextToken() { return CurTok = gettok(); }
 
-/// BinopPrecedence - This holds the precedence for each binary operator that is
-/// defined.
 static std::map<char, int> BinopPrecedence;
 
-/// GetTokPrecedence - Get the precedence of the pending binary operator token.
 static int GetTokPrecedence() {
   if (!isascii(CurTok))
     return -1;
@@ -222,7 +207,6 @@ static int GetTokPrecedence() {
   return TokPrec;
 }
 
-/// LogError* - These are little helper functions for error handling.
 std::unique_ptr<ExprAST> LogError(const char *Str) {
   fprintf(stderr, "Error: %s\n", Str);
   return nullptr;
@@ -235,14 +219,12 @@ std::unique_ptr<PrototypeAST> LogErrorP(const char *Str) {
 
 static std::unique_ptr<ExprAST> ParseExpression();
 
-/// numberexpr ::= number
 static std::unique_ptr<ExprAST> ParseNumberExpr() {
   auto Result = std::make_unique<NumberExprAST>(NumVal);
   getNextToken(); // consume the number
   return std::move(Result);
 }
 
-/// parenexpr ::= '(' expression ')'
 static std::unique_ptr<ExprAST> ParseParenExpr() {
   getNextToken(); // eat (.
   auto V = ParseExpression();
@@ -255,9 +237,6 @@ static std::unique_ptr<ExprAST> ParseParenExpr() {
   return V;
 }
 
-/// identifierexpr
-///   ::= identifier
-///   ::= identifier '(' expression* ')'
 static std::unique_ptr<ExprAST> ParseIdentifierExpr() {
   std::string IdName = IdentifierStr;
 
@@ -266,7 +245,7 @@ static std::unique_ptr<ExprAST> ParseIdentifierExpr() {
   if (CurTok != '(') // Simple variable ref.
     return std::make_unique<VariableExprAST>(IdName);
 
-  // Call.
+  // Call expression
   getNextToken(); // eat (
   std::vector<std::unique_ptr<ExprAST>> Args;
   if (CurTok != ')') {
@@ -291,10 +270,6 @@ static std::unique_ptr<ExprAST> ParseIdentifierExpr() {
   return std::make_unique<CallExprAST>(IdName, std::move(Args));
 }
 
-/// primary
-///   ::= identifierexpr
-///   ::= numberexpr
-///   ::= parenexpr
 static std::unique_ptr<ExprAST> ParsePrimary() {
   switch (CurTok) {
   default:
@@ -308,8 +283,6 @@ static std::unique_ptr<ExprAST> ParsePrimary() {
   }
 }
 
-/// binoprhs
-///   ::= ('+' primary)*
 static std::unique_ptr<ExprAST> ParseBinOpRHS(int ExprPrec,
                                               std::unique_ptr<ExprAST> LHS) {
   // If this is a binop, find its precedence.
@@ -345,8 +318,6 @@ static std::unique_ptr<ExprAST> ParseBinOpRHS(int ExprPrec,
   }
 }
 
-/// expression
-///   ::= primary binoprhs
 static std::unique_ptr<ExprAST> ParseExpression() {
   auto LHS = ParsePrimary();
   if (!LHS)
@@ -355,8 +326,6 @@ static std::unique_ptr<ExprAST> ParseExpression() {
   return ParseBinOpRHS(0, std::move(LHS));
 }
 
-/// prototype
-///   ::= id '(' id* ')'
 static std::unique_ptr<PrototypeAST> ParsePrototype() {
   if (CurTok != tok_identifier)
     return LogErrorP("Expected function name in prototype");
@@ -379,7 +348,6 @@ static std::unique_ptr<PrototypeAST> ParsePrototype() {
   return std::make_unique<PrototypeAST>(FnName, std::move(ArgNames));
 }
 
-/// definition ::= 'def' prototype expression
 static std::unique_ptr<FunctionAST> ParseDefinition() {
   getNextToken(); // eat def.
   auto Proto = ParsePrototype();
@@ -391,7 +359,6 @@ static std::unique_ptr<FunctionAST> ParseDefinition() {
   return nullptr;
 }
 
-/// toplevelexpr ::= expression
 static std::unique_ptr<FunctionAST> ParseTopLevelExpr() {
   if (auto E = ParseExpression()) {
     // Make an anonymous proto.
@@ -402,7 +369,6 @@ static std::unique_ptr<FunctionAST> ParseTopLevelExpr() {
   return nullptr;
 }
 
-/// external ::= 'extern' prototype
 static std::unique_ptr<PrototypeAST> ParseExtern() {
   getNextToken(); // eat extern.
   return ParsePrototype();
@@ -640,7 +606,6 @@ static void HandleTopLevelExpression() {
   }
 }
 
-/// top ::= definition | external | expression | ';'
 static void MainLoop() {
   while (true) {
     fprintf(stderr, "ready> ");
