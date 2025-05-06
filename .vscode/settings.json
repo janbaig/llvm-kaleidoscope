@@ -1,0 +1,29 @@
+{
+    "files.associations": {
+        "istream": "cpp",
+        "__config": "cpp",
+        "__hash_table": "cpp",
+        "__tree": "cpp",
+        "array": "cpp",
+        "complex": "cpp",
+        "deque": "cpp",
+        "memory_resource": "cpp",
+        "format": "cpp",
+        "functional": "cpp",
+        "future": "cpp",
+        "list": "cpp",
+        "locale": "cpp",
+        "map": "cpp",
+        "memory": "cpp",
+        "mutex": "cpp",
+        "ostream": "cpp",
+        "print": "cpp",
+        "string": "cpp",
+        "tuple": "cpp",
+        "unordered_map": "cpp",
+        "utility": "cpp",
+        "variant": "cpp",
+        "vector": "cpp",
+        "*.inc": "cpp"
+    }
+}
