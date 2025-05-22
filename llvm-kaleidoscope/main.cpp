@@ -62,17 +62,19 @@ static int gettok() {
 
   if (isalpha(LastChar)) { // identifier: [a-zA-Z][a-zA-Z0-9]*
     IdentifierStr = LastChar;
+    
     while (isalnum((LastChar = getchar())))
       IdentifierStr += LastChar;
-
+    
     if (IdentifierStr == "def")
       return tok_def;
     if (IdentifierStr == "extern")
       return tok_extern;
+
     return tok_identifier;
   }
 
-  if (isdigit(LastChar) || LastChar == '.') { // Number: [0-9.]+
+  if (isdigit(LastChar)) { // Number: [0-9.]+
     std::string NumStr;
     do {
       NumStr += LastChar;
@@ -83,8 +85,7 @@ static int gettok() {
     return tok_number;
   }
 
-  if (LastChar == '#') {
-    // Comment until end of line.
+  if (LastChar == '#') { // Comment until end of line.
     do
       LastChar = getchar();
     while (LastChar != EOF && LastChar != '\n' && LastChar != '\r');
@@ -99,7 +100,7 @@ static int gettok() {
 
   // Otherwise, just return the character as its ascii value.
   int ThisChar = LastChar;
-  LastChar = getchar();
+  LastChar = getchar(); // returns an ascii int
   return ThisChar;
 }
 
@@ -381,6 +382,7 @@ static std::unique_ptr<PrototypeAST> ParseExtern() {
 static std::unique_ptr<LLVMContext> TheContext;
 static std::unique_ptr<Module> TheModule;
 static std::unique_ptr<IRBuilder<>> Builder;
+
 static std::map<std::string, Value *> NamedValues;
 static std::unique_ptr<KaleidoscopeJIT> TheJIT;
 static std::unique_ptr<FunctionPassManager> TheFPM;
@@ -390,6 +392,7 @@ static std::unique_ptr<CGSCCAnalysisManager> TheCGAM;
 static std::unique_ptr<ModuleAnalysisManager> TheMAM;
 static std::unique_ptr<PassInstrumentationCallbacks> ThePIC;
 static std::unique_ptr<StandardInstrumentations> TheSI;
+
 static std::map<std::string, std::unique_ptr<PrototypeAST>> FunctionProtos;
 static ExitOnError ExitOnErr;
 
