@@ -24,6 +24,14 @@
         "utility": "cpp",
         "variant": "cpp",
         "vector": "cpp",
-        "*.inc": "cpp"
+        "*.inc": "cpp",
+        "__assertion_handler": "cpp",
+        "algorithm": "cpp",
+        "cstdio": "cpp",
+        "forward_list": "cpp",
+        "set": "cpp",
+        "string_view": "cpp",
+        "typeinfo": "cpp",
+        "*.def": "cpp"
     }
 }

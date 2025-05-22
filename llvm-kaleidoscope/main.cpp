@@ -101,7 +101,7 @@ static int gettok() {
   // Otherwise, just return the character as its ascii value.
   int ThisChar = LastChar;
   LastChar = getchar(); // returns an ascii int
-  return ThisChar;
+  return ThisChar; // could be a binop
 }
 
 //===----------------------------------------------------------------------===//
@@ -459,6 +459,8 @@ Function *PrototypeAST::codegen() {
   // Make the function type:  double(double,double) etc.
   std::vector<Type *> Doubles(Args.size(), Type::getDoubleTy(*TheContext));
   FunctionType *FT =
+      // get(...) because we want to reuse the type pointer if it already
+      // exists in the context; otherwise, create a new one
       FunctionType::get(Type::getDoubleTy(*TheContext), Doubles, false);
 
   Function *F =
@@ -474,6 +476,7 @@ Function *PrototypeAST::codegen() {
 
 Function *FunctionAST::codegen() {
   // First, check for an existing function from a previous 'extern' declaration.
+  // Don't want to re-emit the prototype
   Function *TheFunction = TheModule->getFunction(Proto->getName());
 
   if (!TheFunction)
@@ -522,7 +525,7 @@ static void InitializeModuleAndManagers() {
   // Create a new builder for the module.
   Builder = std::make_unique<IRBuilder<>>(*TheContext);
 
-// LLVM optimization + analysis pass manager
+  // LLVM optimization + analysis pass manager
   TheFPM = std::make_unique<FunctionPassManager>();
   TheLAM = std::make_unique<LoopAnalysisManager>();
   TheFAM = std::make_unique<FunctionAnalysisManager>();
