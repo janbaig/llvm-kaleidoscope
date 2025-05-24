@@ -261,7 +261,7 @@ static std::unique_ptr<ExprAST> ParseIdentifierExpr() {
 
       if (CurTok != ',')
         return LogError("Expected ')' or ',' in argument list");
-      getNextToken();
+      getNextToken(); // consume the ','
     }
   }
 
@@ -588,6 +588,8 @@ static void HandleTopLevelExpression() {
       // anonymous expression -- that way we can free it after executing.
       auto RT = TheJIT->getMainJITDylib().createResourceTracker();
 
+      // After passing the module and context to the JIT, they are no longer
+      // valid—treat their pointers as moved and unusable.
       auto TSM = ThreadSafeModule(std::move(TheModule), std::move(TheContext));
       ExitOnErr(TheJIT->addModule(std::move(TSM), RT));
       
