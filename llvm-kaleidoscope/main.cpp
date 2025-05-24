@@ -401,6 +401,19 @@ Value *LogErrorV(const char *Str) {
   return nullptr;
 }
 
+Function *getFunction(std::string Name) {
+  if (auto *F = TheModule->getFunction(Name))
+    return F;
+
+  // The function dne in the current module, check if we can codegen it's decl
+  // from an existing prototype (defined in another module)
+  auto FI = FunctionProtos.find(Name);
+  if (FI != FunctionProtos.end())
+    return FI->second->codegen();
+  
+  return nullptr;
+}
+
 Value *NumberExprAST::codegen() {
   return ConstantFP::get(*TheContext, APFloat(Val));
 }
@@ -437,7 +450,7 @@ Value *BinaryExprAST::codegen() {
 
 Value *CallExprAST::codegen() {
   // Look up the name in the global module table.
-  Function *CalleeF = TheModule->getFunction(Callee);
+  Function *CalleeF = getFunction(Callee);
   if (!CalleeF)
     return LogErrorV("Unknown function referenced");
 
@@ -475,14 +488,10 @@ Function *PrototypeAST::codegen() {
 }
 
 Function *FunctionAST::codegen() {
-  // First, check for an existing function from a previous 'extern' declaration.
-  // Don't want to re-emit the prototype
-  Function *TheFunction = TheModule->getFunction(Proto->getName());
-
-  if (!TheFunction)
-    TheFunction = Proto->codegen();
-
-  if (!TheFunction)
+  auto &P = *Proto; 
+  FunctionProtos[Proto->getName()] = std::move(Proto);
+  Function *TheFunction = getFunction(P.getName());
+  if (!TheFunction) 
     return nullptr;
 
   // Create a new basic block to start insertion into.
@@ -501,7 +510,7 @@ Function *FunctionAST::codegen() {
     // Validate the generated code, checking for consistency.
     verifyFunction(*TheFunction);
     
-    // Optimization the function 
+    // Optimize the function 
     TheFPM->run(*TheFunction, *TheFAM);
     
     return TheFunction;
@@ -555,6 +564,9 @@ static void HandleDefinition() {
       fprintf(stderr, "Read function definition:\n");
       FnIR->print(errs());
       fprintf(stderr, "\n");
+      ExitOnErr(TheJIT->addModule(
+        ThreadSafeModule(std::move(TheModule), std::move(TheContext))));
+      InitializeModuleAndManagers();
     }
   } else {
     // Skip token for error recovery.
@@ -568,6 +580,7 @@ static void HandleExtern() {
       fprintf(stderr, "Read extern:\n");
       FnIR->print(errs());
       fprintf(stderr, "\n");
+      FunctionProtos[ProtoAST->getName()] = std::move(ProtoAST);
     }
   } else {
     // Skip token for error recovery.
@@ -581,8 +594,6 @@ static void HandleTopLevelExpression() {
     if (auto *FnIR = FnAST->codegen()) {
       // Print the IR
       fprintf(stderr, "Read extern:\n");
-      FnIR->print(errs());
-      fprintf(stderr, "\n");
       
       // Create a ResourceTracker to track JIT'd memory allocated to our
       // anonymous expression -- that way we can free it after executing.
