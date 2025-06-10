@@ -45,11 +45,11 @@ public:
                   JITTargetMachineBuilder JTMB, 
                   DataLayout DL) 
     : ES(std::move(ES)), DL(std::move(DL)), Mangle(*this->ES, this->DL),
-      ObjectLayer(*this->ES, 
-                  []() { return std::make_unique<SectionMemoryManager>(); }),
-      CompileLayer(*this->ES, ObjectLayer, 
-                  std::make_unique<ConcurrentIRCompiler>(std::move(JTMB))),
-      MainJD(this->ES->createBareJITDylib("<main>")) {
+    CompileLayer(*this->ES, ObjectLayer, 
+                std::make_unique<ConcurrentIRCompiler>(std::move(JTMB))),
+    ObjectLayer(*this->ES, 
+      []() { return std::make_unique<SectionMemoryManager>(); }),
+    MainJD(this->ES->createBareJITDylib("<main>")) {
 
     MainJD.addGenerator( // Adds a generator to search for symbols in the current process
       cantFail(DynamicLibrarySearchGenerator::GetForCurrentProcess(
@@ -62,6 +62,7 @@ public:
   }
 
   static Expected<std::unique_ptr<KaleidoscopeJIT>> Create() {
+    // We'll be running the JIT in-process, hence why the self ExecutorProcessControl
     auto EPC = SelfExecutorProcessControl::Create();
     if (!EPC) 
       return EPC.takeError();

@@ -526,12 +526,10 @@ Function *FunctionAST::codegen() {
 //===----------------------------------------------------------------------===//
 
 static void InitializeModuleAndManagers() {
-  // Open a new context and module.
+  // Open a new context, module and builder
   TheContext = std::make_unique<LLVMContext>();
   TheModule = std::make_unique<Module>("KaleidoscopeJIT", *TheContext);
   TheModule->setDataLayout(TheJIT->getDataLayout());
-
-  // Create a new builder for the module.
   Builder = std::make_unique<IRBuilder<>>(*TheContext);
 
   // LLVM optimization + analysis pass manager
@@ -548,7 +546,7 @@ static void InitializeModuleAndManagers() {
   // Add transform passes.
   TheFPM->addPass(InstCombinePass());
   TheFPM->addPass(ReassociatePass());
-  TheFPM->addPass(GVNPass());
+  TheFPM->addPass(GVNPass()); // common subsexpression elimination
   TheFPM->addPass(SimplifyCFGPass());
 
   // Register analysis passes used in these transform passes.
@@ -580,7 +578,7 @@ static void HandleExtern() {
       fprintf(stderr, "Read extern:\n");
       FnIR->print(errs());
       fprintf(stderr, "\n");
-      FunctionProtos[ProtoAST->getName()] = std::move(ProtoAST);
+      FunctionProtos[ProtoAST->getName()] = std::move(ProtoAST); // we dont' want to codegen the prototype each time
     }
   } else {
     // Skip token for error recovery.
@@ -672,7 +670,7 @@ int main() {
 
   MainLoop();
 
-  // Print out all of the generated code.
+  // Print out all of the generated code, we discharge modules tho..? whats the point here?
   TheModule->print(errs(), nullptr);
 
   return 0;
