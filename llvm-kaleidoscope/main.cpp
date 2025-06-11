@@ -47,7 +47,12 @@ enum Token {
 
   // primary
   tok_identifier = -4,
-  tok_number = -5
+  tok_number = -5,
+
+  // control flow
+  tok_if = -6, 
+  tok_then = -7, 
+  tok_else = -8,
 };
 
 static std::string IdentifierStr; // Filled in if tok_identifier
@@ -65,12 +70,16 @@ static int gettok() {
     
     while (isalnum((LastChar = getchar())))
       IdentifierStr += LastChar;
-    
     if (IdentifierStr == "def")
       return tok_def;
     if (IdentifierStr == "extern")
       return tok_extern;
-
+    if (IdentifierStr == "if")
+      return tok_if;
+    if (IdentifierStr == "then")
+      return tok_then; 
+    if (IdentifierStr == "else")
+      return tok_else;
     return tok_identifier;
   }
 
@@ -186,6 +195,18 @@ public:
   Function *codegen();
 };
 
+class IfExprAST : public ExprAST {
+  std::unique_ptr<ExprAST> Cond, Then, Else;
+
+public: 
+  IfExprAST(std::unique_ptr<ExprAST> Cond, 
+            std::unique_ptr<ExprAST> Then, 
+            std::unique_ptr<ExprAST> Else) 
+          : Cond(std::move(Cond)), Then(std::move(Then)), Else(std::move(Else)) {} 
+  
+  Value *codegen() override;
+};
+
 } // end anonymous namespace
 
 //===----------------------------------------------------------------------===//
@@ -281,6 +302,8 @@ static std::unique_ptr<ExprAST> ParsePrimary() {
     return ParseNumberExpr();
   case '(':
     return ParseParenExpr();
+  case tok_if: 
+    return ParseIfExpr();
   }
 }
 
@@ -373,6 +396,33 @@ static std::unique_ptr<FunctionAST> ParseTopLevelExpr() {
 static std::unique_ptr<PrototypeAST> ParseExtern() {
   getNextToken(); // eat extern.
   return ParsePrototype();
+}
+
+static std::unique_ptr<ExprAST> ParseIfExpr() {
+  getNextToken(); // eat the 'if' keyword
+
+  // condition 
+  auto Cond = ParseExpression();
+  if (!Cond) 
+    return nullptr; 
+  
+  if (CurTok != tok_then) 
+    return LogError("expected 'then' keyword"); 
+  getNextToken(); // eat the 'then' keyword
+  
+  auto Then = ParseExpression();
+  if (!Then) 
+    return nullptr; 
+  
+  if (CurTok != tok_else)
+    return LogError("expected 'else' keyword"); // too strict, might tweak later down the line
+  getNextToken(); // eat the 'then' keyword
+
+  auto Else = ParseExpression();
+  if (!Else) 
+    return nullptr; 
+  
+  return std::make_unique<IfExprAST>(std::move(Cond), std::move(Then), std::move(Else));
 }
 
 //===----------------------------------------------------------------------===//
@@ -521,6 +571,25 @@ Function *FunctionAST::codegen() {
   return nullptr;
 }
 
+Value *IfExprAST::codegen() {
+  Value *CondV = Cond->codegen();
+  if (!Cond) 
+    return nullptr; 
+  
+  // Compare condition != 0, if yes then true, else false bool value
+  CondV = Builder->CreateFCmpONE(CondV, ConstantFP::get(*TheContext, APFloat(0.0)), "ifcond");
+  
+  Function *TheFunction = Builder->GetInsertBlock()->getParent();
+
+  // has Function because we wanna insert this at the end of the current BB
+  BasicBlock *ThenBB = BasicBlock::Create(*TheContext, "then", TheFunction);
+  BasicBlock *ElseBB = BasicBlock::Create(*TheContext, "else");
+  BasicBlock *MergeBB = BasicBlock::Create(*TheContext, "ifcont");
+
+  // create the conditional branch
+  Builder->CreateCondBr(CondV, ThenBB, ElseBB);
+};
+
 //===----------------------------------------------------------------------===//
 // Top-Level parsing and JIT Driver
 //===----------------------------------------------------------------------===//
@@ -578,7 +647,7 @@ static void HandleExtern() {
       fprintf(stderr, "Read extern:\n");
       FnIR->print(errs());
       fprintf(stderr, "\n");
-      FunctionProtos[ProtoAST->getName()] = std::move(ProtoAST); // we dont' want to codegen the prototype each time
+      FunctionProtos[ProtoAST->getName()] = std::move(ProtoAST); // we dont' want to codegen the prototype
     }
   } else {
     // Skip token for error recovery.
@@ -590,9 +659,6 @@ static void HandleTopLevelExpression() {
   // Evaluate a top-level expression into an anonymous function.
   if (auto FnAST = ParseTopLevelExpr()) {
     if (auto *FnIR = FnAST->codegen()) {
-      // Print the IR
-      fprintf(stderr, "Read extern:\n");
-      
       // Create a ResourceTracker to track JIT'd memory allocated to our
       // anonymous expression -- that way we can free it after executing.
       auto RT = TheJIT->getMainJITDylib().createResourceTracker();
