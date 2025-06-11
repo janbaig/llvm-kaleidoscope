@@ -572,6 +572,7 @@ Function *FunctionAST::codegen() {
 }
 
 Value *IfExprAST::codegen() {
+  // emits inside entryBB
   Value *CondV = Cond->codegen();
   if (!Cond) 
     return nullptr; 
@@ -579,6 +580,7 @@ Value *IfExprAST::codegen() {
   // Compare condition != 0, if yes then true, else false bool value
   CondV = Builder->CreateFCmpONE(CondV, ConstantFP::get(*TheContext, APFloat(0.0)), "ifcond");
   
+  // the parent would be whatever function contained the ifExpr 
   Function *TheFunction = Builder->GetInsertBlock()->getParent();
 
   // has Function because we wanna insert this at the end of the current BB
@@ -586,8 +588,33 @@ Value *IfExprAST::codegen() {
   BasicBlock *ElseBB = BasicBlock::Create(*TheContext, "else");
   BasicBlock *MergeBB = BasicBlock::Create(*TheContext, "ifcont");
 
-  // create the conditional branch
+  // create the conditional branch, inside the entryBB
   Builder->CreateCondBr(CondV, ThenBB, ElseBB);
+
+  // emit into the 'then' block 
+  Builder->SetInsertPoint(ThenBB);
+  Value *ThenV = Then->codegen(); 
+  if (!ThenV) 
+    return nullptr; 
+  Builder->CreateBr(MergeBB);
+  ThenBB = Builder->GetInsertBlock(); // whatever BB the Then->codegen stopped at 
+
+  // emit into the 'else' block 
+  TheFunction->insert(TheFunction->end(), ElseBB);
+  Builder->SetInsertPoint(ElseBB);
+  Value *ElseV = Else->codegen();
+  if (!ElseV) 
+    return nullptr;
+  Builder->CreateBr(MergeBB);
+  ElseBB = Builder->GetInsertBlock();
+
+  // emit into the 'merge' block
+  TheFunction->insert(TheFunction->end(), MergeBB);
+  Builder->SetInsertPoint(MergeBB);
+  PHINode *PN = Builder->CreatePHI(Type::getDoubleTy(*TheContext), 2, "iftmp");
+  PN->addIncoming(ThenV, ThenBB);
+  PN->addIncoming(ElseV, ElseBB);
+  return PN;
 };
 
 //===----------------------------------------------------------------------===//
