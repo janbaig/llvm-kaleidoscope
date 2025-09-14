@@ -851,7 +851,6 @@ static void HandleTopLevelExpression() {
 
 static void MainLoop() {
   while (true) {
-    fprintf(stderr, "ready> ");
     switch (CurTok) {
     case tok_eof:
       return;
@@ -868,6 +867,9 @@ static void MainLoop() {
       HandleTopLevelExpression();
       break;
     }
+    // Print prompt only when ready for the NEXT user input
+    fprintf(stderr, "ready> ");
+    fflush(stderr);
   }
 }
 
@@ -887,6 +889,7 @@ int main() {
 
   // Prime the first token.
   fprintf(stderr, "ready> ");
+  fflush(stderr);
   getNextToken();
 
   TheJIT = ExitOnErr(KaleidoscopeJIT::Create());
