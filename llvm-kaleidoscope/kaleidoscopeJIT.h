@@ -35,8 +35,8 @@ private:
   std::unique_ptr<ExecutionSession> ES;       // Manages JIT runtime state
   DataLayout DL;                              // Target data layout (e.g., x86_64)
   MangleAndInterner Mangle;                   // Mangles symbol names (e.g., "foo" → "_Z3foov")
-  IRCompileLayer CompileLayer;                // Compiles IR → object files
   RTDyldObjectLinkingLayer ObjectLayer;       // Links object files into memory
+  IRCompileLayer CompileLayer;                // Compiles IR → object files
   JITDylib &MainJD;                           // Dynamic library - "symbol table" for JIT-compiled code
 
 public:
@@ -45,10 +45,10 @@ public:
                   JITTargetMachineBuilder JTMB, 
                   DataLayout DL) 
     : ES(std::move(ES)), DL(std::move(DL)), Mangle(*this->ES, this->DL),
-    CompileLayer(*this->ES, ObjectLayer, 
-                std::make_unique<ConcurrentIRCompiler>(std::move(JTMB))),
     ObjectLayer(*this->ES, 
       []() { return std::make_unique<SectionMemoryManager>(); }),
+    CompileLayer(*this->ES, ObjectLayer, 
+                std::make_unique<ConcurrentIRCompiler>(std::move(JTMB))),
     MainJD(this->ES->createBareJITDylib("<main>")) {
 
     MainJD.addGenerator( // Adds a generator to search for symbols in the current process
